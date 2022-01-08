@@ -40,7 +40,7 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
 }
 
 
-static bool insideTriangle(int x, int y, const Vector3f* _v)
+static bool insideTriangle(float x, float y, const Vector3f* _v)
 {   
     // TODO : Implement this function to check if the point (x, y) is inside the triangle represented by _v[0], _v[1], _v[2]
 
@@ -58,7 +58,7 @@ static bool insideTriangle(int x, int y, const Vector3f* _v)
     c2 = a2.cross(b2).z();
     c3 = a3.cross(b3).z();
 
-    if ((c1 > 0 && c2 > 0 && c3 > 0) || (c1 < 0 && c2 < 0 && c3 < 0))
+    if ((c1 >= 0 && c2 >= 0 && c3 >= 0) || (c1 < 0 && c2 < 0 && c3 < 0))
         return true;
     else 
         return false;
@@ -118,7 +118,8 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
         t.setColor(1, col_y[0], col_y[1], col_y[2]);
         t.setColor(2, col_z[0], col_z[1], col_z[2]);
 
-        rasterize_triangle(t);
+        // rasterize_triangle(t);
+        rasterize_triangle_msaa(t);
     }
 }
 
@@ -154,6 +155,60 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
                 {
                     depth_buf[index] = z_interpolated;
                     set_pixel(Vector3f(x, y, 1), t.getColor());
+                }
+            }
+        }
+    }
+    
+}
+
+// With antialiasing by 4x4 MSAA
+void rst::rasterizer::rasterize_triangle_msaa(const Triangle& t) {
+    auto v = t.toVector4();
+    
+    // TODO : Find out the bounding box of current triangle.
+    // iterate through the pixel and find if the current pixel is inside the triangle
+    // int x_max,x_min,y_max,y_min,index;
+    int x_min = MIN(floor(v[0].x()), MIN(floor(v[1].x()), floor(v[2].x())));
+    int x_max = MAX(ceil(v[0].x()), MAX(ceil(v[1].x()), ceil(v[2].x())));
+    int y_min = MIN(floor(v[0].y()), MIN(floor(v[1].y()), floor(v[2].y())));
+    int y_max = MAX(ceil(v[0].y()), MAX(ceil(v[1].y()), ceil(v[2].y())));
+    
+    int index;
+
+    for (int x = x_min; x <= x_max; x++)
+    {
+        for (int y = y_min; y <= y_max; y++)
+        {
+            float d[] = {0.125f, 0.375f, 0.625f, 0.875f};
+            int pixel_weight = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    float x_bias = x + d[i];
+                    float y_bias = y + d[j];
+                    // std::cout << x_bias << " " << y_bias << std::endl;
+                    if (insideTriangle(x_bias, y_bias, t.v))
+                    {
+                        pixel_weight++;
+                    }
+                }
+            }
+            if (pixel_weight)
+            {
+                // If so, use the following code to get the interpolated z value.
+                auto[alpha, beta, gamma] = computeBarycentric2D(x, y, t.v);
+                float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                z_interpolated *= w_reciprocal;
+
+                // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
+                index = get_index(x, y);
+                if (z_interpolated < depth_buf[index])
+                {
+                    depth_buf[index] = z_interpolated;
+                    set_pixel_msaa(Vector3f(x, y, 1), t.getColor(), pixel_weight / 16.0f);
                 }
             }
         }
@@ -204,6 +259,14 @@ void rst::rasterizer::set_pixel(const Eigen::Vector3f& point, const Eigen::Vecto
     //old index: auto ind = point.y() + point.x() * width;
     auto ind = (height-1-point.y())*width + point.x();
     frame_buf[ind] = color;
+
+}
+
+void rst::rasterizer::set_pixel_msaa(const Eigen::Vector3f& point, const Eigen::Vector3f& color, float ratio)
+{
+    //old index: auto ind = point.y() + point.x() * width;
+    auto ind = (height-1-point.y())*width + point.x();
+    frame_buf[ind] = color * ratio;
 
 }
 

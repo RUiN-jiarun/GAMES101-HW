@@ -67,6 +67,7 @@ namespace rst
         void set_projection(const Eigen::Matrix4f& p);
 
         void set_pixel(const Eigen::Vector3f& point, const Eigen::Vector3f& color);
+        void set_pixel_msaa(const Eigen::Vector3f& point, const Eigen::Vector3f& color, float ratio);
 
         void clear(Buffers buff);
 
@@ -79,6 +80,8 @@ namespace rst
 
         void rasterize_triangle(const Triangle& t);
 
+        // with antialiasing
+        void rasterize_triangle_msaa(const Triangle& t);
         // VERTEX SHADER -> MVP -> Clipping -> /.W -> VIEWPORT -> DRAWLINE/DRAWTRI -> FRAGSHADER
 
     private:
