@@ -111,7 +111,7 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     if (payload.texture)
     {
         // TODO: Get the texture value at the texture coordinates of the current fragment
-
+        return_color = payload.texture->getColor(payload.tex_coords.x(), payload.tex_coords.y());
     }
     Eigen::Vector3f texture_color;
     texture_color << return_color.x(), return_color.y(), return_color.z();
@@ -139,7 +139,19 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
         // components are. Then, accumulate that result on the *result_color* object.
+        Eigen::Vector3f light_dir = light.position - point;
+        Eigen::Vector3f view_dir = eye_pos - point;
+        float r = light_dir.dot(light_dir);
 
+        Eigen::Vector3f ambient = ka.cwiseProduct(amb_light_intensity);
+        Eigen::Vector3f diffuse = kd.cwiseProduct(light.intensity / r);
+        diffuse *= MAX(0.0f, normal.normalized().dot(light_dir.normalized()));
+
+        Eigen::Vector3f h = (light_dir + view_dir).normalized();
+        Eigen::Vector3f specular = ks.cwiseProduct(light.intensity / r);
+        specular *= std::pow(MAX(0.0f, normal.normalized().dot(h)), p);
+
+        result_color += (ambient + diffuse + specular);
     }
 
     return result_color * 255.f;
@@ -213,15 +225,34 @@ Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload& payl
     
     // TODO: Implement displacement mapping here
     // Let n = normal = (x, y, z)
+    float x = normal.x();
+    float y = normal.y();
+    float z = normal.z();
     // Vector t = (x*y/sqrt(x*x+z*z),sqrt(x*x+z*z),z*y/sqrt(x*x+z*z))
     // Vector b = n cross product t
     // Matrix TBN = [t b n]
+    Eigen::Vector3f t {x*y/std::sqrt(x*x+z*z),std::sqrt(x*x+z*z),z*y/std::sqrt(x*x+z*z)};
+    Eigen::Vector3f b = normal.cross(t);
+    Eigen::Matrix3f TBN;
+    TBN << t.x(), b.x(), x,
+           t.y(), b.y(), y,
+           t.z(), b.z(), z;
+
+    float u = payload.tex_coords.x();
+    float v = payload.tex_coords.y();
+    float w = payload.texture->width;
+    float h = payload.texture->height;
     // dU = kh * kn * (h(u+1/w,v)-h(u,v))
     // dV = kh * kn * (h(u,v+1/h)-h(u,v))
+    float dU = kh * kn * (payload.texture->getColor(u + 1.0f / w, v).norm() - payload.texture->getColor(u, v).norm());
+    float dV = kh * kn * (payload.texture->getColor(u, v + 1.0f / h).norm() - payload.texture->getColor(u, v).norm());
     // Vector ln = (-dU, -dV, 1)
+    Eigen::Vector3f ln {-dU, -dV, 1.0f};
     // Position p = p + kn * n * h(u,v)
     // Normal n = normalize(TBN * ln)
+    point += (kn * normal * payload.texture->getColor(u, v).norm());
 
+    normal = (TBN * ln).normalized();
 
     Eigen::Vector3f result_color = {0, 0, 0};
 
@@ -229,7 +260,19 @@ Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload& payl
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
         // components are. Then, accumulate that result on the *result_color* object.
+        Eigen::Vector3f light_dir = light.position - point;
+        Eigen::Vector3f view_dir = eye_pos - point;
+        float r = light_dir.dot(light_dir);
 
+        Eigen::Vector3f ambient = ka.cwiseProduct(amb_light_intensity);
+        Eigen::Vector3f diffuse = kd.cwiseProduct(light.intensity / r);
+        diffuse *= MAX(0.0f, normal.normalized().dot(light_dir.normalized()));
+
+        Eigen::Vector3f h = (light_dir + view_dir).normalized();
+        Eigen::Vector3f specular = ks.cwiseProduct(light.intensity / r);
+        specular *= std::pow(MAX(0.0f, normal.normalized().dot(h)), p);
+
+        result_color += (ambient + diffuse + specular);
 
     }
 
@@ -262,14 +305,31 @@ Eigen::Vector3f bump_fragment_shader(const fragment_shader_payload& payload)
 
     // TODO: Implement bump mapping here
     // Let n = normal = (x, y, z)
+    float x = normal.x();
+    float y = normal.y();
+    float z = normal.z();
     // Vector t = (x*y/sqrt(x*x+z*z),sqrt(x*x+z*z),z*y/sqrt(x*x+z*z))
     // Vector b = n cross product t
     // Matrix TBN = [t b n]
+    Eigen::Vector3f t {x*y/std::sqrt(x*x+z*z),std::sqrt(x*x+z*z),z*y/std::sqrt(x*x+z*z)};
+    Eigen::Vector3f b = normal.cross(t);
+    Eigen::Matrix3f TBN;
+    TBN << t.x(), b.x(), x,
+           t.y(), b.y(), y,
+           t.z(), b.z(), z;
+
+    float u = payload.tex_coords.x();
+    float v = payload.tex_coords.y();
+    float w = payload.texture->width;
+    float h = payload.texture->height;
     // dU = kh * kn * (h(u+1/w,v)-h(u,v))
     // dV = kh * kn * (h(u,v+1/h)-h(u,v))
+    float dU = kh * kn * (payload.texture->getColor(u + 1.0f / w, v).norm() - payload.texture->getColor(u, v).norm());
+    float dV = kh * kn * (payload.texture->getColor(u, v + 1.0f / h).norm() - payload.texture->getColor(u, v).norm());
     // Vector ln = (-dU, -dV, 1)
+    Eigen::Vector3f ln {-dU, -dV, 1.0f};
     // Normal n = normalize(TBN * ln)
-
+    normal = (TBN * ln).normalized();
 
     Eigen::Vector3f result_color = {0, 0, 0};
     result_color = normal;
