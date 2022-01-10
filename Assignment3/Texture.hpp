@@ -30,5 +30,39 @@ public:
         return Eigen::Vector3f(color[0], color[1], color[2]);
     }
 
+    Eigen::Vector3f getColorBilinear(float u, float v)
+    {
+        auto u_img = u * width;
+        auto v_img = (1 - v) * height;
+
+        float u_min = floor(u_img);
+        float u_max = MIN(width, ceil(u_img));
+        float v_min = floor(v_img);
+        float v_max = MIN(height, ceil(v_img));
+
+        // T3------O2-----T4 
+        // |       |      |
+        // |       |      |
+        // |       |      |
+        // T-------O------T'
+        // |       |      |
+        // |       |      |
+        // T1------O1-----T2
+
+        auto T1 = image_data.at<cv::Vec3b>(v_max, u_min);
+        auto T2 = image_data.at<cv::Vec3b>(v_max, u_max);
+        auto T3 = image_data.at<cv::Vec3b>(v_min, u_min);
+        auto T4 = image_data.at<cv::Vec3b>(v_min, u_max);
+
+        float alpha = (u_img - u_min) / (u_max - u_min);
+        auto O1 = (1 - alpha) * T1 + alpha * T2;
+        auto O2 = (1 - alpha) * T3 + alpha * T4;
+
+        float beta = (v_max - v_img) / (v_max - v_min);
+        auto O = (1 - beta) * O1 + beta * O2;
+
+        return Eigen::Vector3f(O[0], O[1], O[2]);
+    }
+
 };
 #endif //RASTERIZER_TEXTURE_H

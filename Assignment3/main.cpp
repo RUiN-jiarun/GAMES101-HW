@@ -105,13 +105,16 @@ struct light
     Eigen::Vector3f intensity;
 };
 
+
 Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
 {
     Eigen::Vector3f return_color = {0, 0, 0};
     if (payload.texture)
     {
         // TODO: Get the texture value at the texture coordinates of the current fragment
-        return_color = payload.texture->getColor(payload.tex_coords.x(), payload.tex_coords.y());
+        // return_color = payload.texture->getColor(payload.tex_coords.x(), payload.tex_coords.y());
+        // Try to do bilinear sampling
+        return_color = payload.texture->getColorBilinear(payload.tex_coords.x(), payload.tex_coords.y());
     }
     Eigen::Vector3f texture_color;
     texture_color << return_color.x(), return_color.y(), return_color.z();
@@ -381,7 +384,8 @@ int main(int argc, const char** argv)
         {
             std::cout << "Rasterizing using the texture shader\n";
             active_shader = texture_fragment_shader;
-            texture_path = "spot_texture.png";
+            // texture_path = "spot_texture.png";
+            texture_path = "spot_texture_downsampled.png";
             r.set_texture(Texture(obj_path + texture_path));
         }
         else if (argc == 3 && std::string(argv[2]) == "normal")
