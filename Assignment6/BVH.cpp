@@ -25,6 +25,7 @@ BVHAccel::BVHAccel(std::vector<Object*> p, int maxPrimsInNode,
         hrs, mins, secs);
 }
 
+// TODO: using SAH acceleration algorithm
 BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
 {
     BVHBuildNode* node = new BVHBuildNode();
@@ -50,33 +51,99 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
     }
     else {
         Bounds3 centroidBounds;
+        // Get the largest bbox
         for (int i = 0; i < objects.size(); ++i)
             centroidBounds =
                 Union(centroidBounds, objects[i]->getBounds().Centroid());
-        int dim = centroidBounds.maxExtent();
-        switch (dim) {
-        case 0:
-            std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
-                return f1->getBounds().Centroid().x <
-                       f2->getBounds().Centroid().x;
-            });
-            break;
-        case 1:
-            std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
-                return f1->getBounds().Centroid().y <
-                       f2->getBounds().Centroid().y;
-            });
-            break;
-        case 2:
-            std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
-                return f1->getBounds().Centroid().z <
-                       f2->getBounds().Centroid().z;
-            });
-            break;
+        // Compute the total area
+        float Sn = centroidBounds.SurfaceArea();
+        // Set the bucket number B (B < 32)
+        int B = 25;
+        float minCost = std::numeric_limits<float>::infinity();
+        int minCostCoor = 0;
+        int minCostIndex = 0;
+        
+        // Split according to each axis
+        for (int i = 0; i < 3; i++)     
+        {   
+            switch (i)
+            {
+                case 0:  // sorting x
+                    std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {return f1->getBounds().Centroid().x < f2->getBounds().Centroid().x;});
+                    break;
+                case 1:  // sorting y
+                    std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {return f1->getBounds().Centroid().y < f2->getBounds().Centroid().y;});
+                    break;
+                case 2:  // sorting z
+                    std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {return f1->getBounds().Centroid().z < f2->getBounds().Centroid().z;});
+                    break;
+            }
+            for (int j = 1; j < B; j++)
+            {
+                auto beginning = objects.begin();
+                auto middling = objects.begin() + (objects.size() * j / B);
+                auto ending = objects.end();
+                auto leftshapes = std::vector<Object*>(beginning, middling);
+                auto rightshapes = std::vector<Object*>(middling, ending);
+                // Computing left bbox and right bbox
+                Bounds3 leftBounds, rightBounds;
+                for (int k = 0; k < leftshapes.size(); ++k)
+                    leftBounds = Union(leftBounds, leftshapes[k]->getBounds().Centroid());
+                for (int k = 0; k < rightshapes.size(); ++k)
+                    rightBounds = Union(rightBounds, rightshapes[k]->getBounds().Centroid());
+                float SA = leftBounds.SurfaceArea(); 
+                float SB = rightBounds.SurfaceArea(); 
+                float cost = 1 + (leftshapes.size() * SA + rightshapes.size() * SB) / Sn; //计算花费
+                // Optimize and get the minCost
+                if (cost < minCost) 
+                {
+                    minCost = cost;
+                    minCostIndex = j;
+                    minCostCoor = i;
+                }
+            }
+        }
+
+
+        // int dim = centroidBounds.maxExtent();
+        // switch (dim) {
+        // case 0:
+        //     std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
+        //         return f1->getBounds().Centroid().x <
+        //                f2->getBounds().Centroid().x;
+        //     });
+        //     break;
+        // case 1:
+        //     std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
+        //         return f1->getBounds().Centroid().y <
+        //                f2->getBounds().Centroid().y;
+        //     });
+        //     break;
+        // case 2:
+        //     std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
+        //         return f1->getBounds().Centroid().z <
+        //                f2->getBounds().Centroid().z;
+        //     });
+        //     break;
+        // }
+
+
+        switch (minCostCoor)
+        {
+            case 0:  // sorting x
+                std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {return f1->getBounds().Centroid().x < f2->getBounds().Centroid().x;});
+                break;
+            case 1:  // sorting y
+                std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {return f1->getBounds().Centroid().y < f2->getBounds().Centroid().y;});
+                break;
+            case 2:  // sorting z
+                std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {return f1->getBounds().Centroid().z < f2->getBounds().Centroid().z;});
+                break;
         }
 
         auto beginning = objects.begin();
-        auto middling = objects.begin() + (objects.size() / 2);
+        // auto middling = objects.begin() + (objects.size() / 2);
+        auto middling = objects.begin()+ (objects.size() * minCostIndex / B);
         auto ending = objects.end();
 
         auto leftshapes = std::vector<Object*>(beginning, middling);
