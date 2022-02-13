@@ -119,6 +119,7 @@ Material::Material(MaterialType t, Vector3f e){
 MaterialType Material::getType(){return m_type;}
 ///Vector3f Material::getColor(){return m_color;}
 Vector3f Material::getEmission() {return m_emission;}
+
 bool Material::hasEmission() {
     if (m_emission.norm() > EPSILON) return true;
     else return false;

@@ -28,7 +28,7 @@ inline  bool solveQuadratic(const float &a, const float &b, const float &c, floa
     return true;
 }
 
-inline float get_random_float()
+static inline float get_random_float()
 {
     std::random_device dev;
     std::mt19937 rng(dev());
