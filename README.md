@@ -1,2 +1,2 @@
 # GAMES101-HW
-Self-study
+Self-study ^_^
